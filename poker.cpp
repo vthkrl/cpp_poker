@@ -5,8 +5,10 @@
 #include <algorithm>
 #include <random>
 #include <unordered_map>
+#include <chrono>
 
 using namespace std;
+using namespace std::chrono;
 
 enum class Suits {
     SPADES, CLUBS, HEARTS, DIAMONDS
@@ -72,6 +74,7 @@ class Hand {
     public:
         array<Card, 5> hand;
         vector<Card> relevant_cards;
+        PokerHands hand_type;
 
         unordered_map<int, int> getRankCounts() {
             unordered_map<int, int> rankCounts;
@@ -126,7 +129,31 @@ class Hand {
         }
 
         bool checkStraight() {
+            vector<int> ranks;
 
+            for (const auto& card : hand) {
+                ranks.push_back(card.rank);
+            }
+
+            sort(ranks.begin(), ranks.end());
+
+            if (ranks == vector<int> {2, 3, 4, 5, 14}) {
+                return true;
+            }
+
+            for (int i = 1; i < 5; i++) {
+                if (ranks[i] == ranks[i-1]) {
+                    return false;
+                }
+            }
+
+            for (int i = 1; i < 5; i++) {
+                if (ranks[i] - ranks[i-1] != 1) {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         bool checkFlush() {
@@ -161,7 +188,7 @@ class Hand {
                 }
             }
 
-            return pair && three_oak;
+            return pair && three_oak && rankCounts.size() == 2;
         }
 
         bool check4OAK() {
@@ -210,11 +237,82 @@ string getRankName(int rank) {
     }
 }
 
-int main() {
-    Deck deck;
-    deck.shuffle();
-    
-    for (int i = 0; i < deck.remaining_cards.size(); i++) {
-        cout << i << ". " << deck.remaining_cards[i].cardToString() << endl;
+string pokerHandToString(PokerHands hand) {
+    switch(hand) {
+        case HIGH_CARD: return "High Card";
+        case PAIR: return "Pair";
+        case TWO_PAIR: return "Two Pair";
+        case THREE_OAK: return "Three of a Kind";
+        case STRAIGHT: return "Straight";
+        case FLUSH: return "Flush";
+        case FULL_HOUSE: return "Full House";
+        case FOUR_OAK: return "Four of a Kind";
+        case STRAIGHT_FLUSH: return "Straight Flush";
+        default: return "Unknown";
     }
 }
+
+void checkingHands(int SIMULATIONS) {
+    for (int i = 0; i < SIMULATIONS; i++) {
+        Deck deck;
+        deck.shuffle();
+
+        Hand hand;
+
+        cout << "Testing Hand: \n";
+
+        for (int i = 0; i < 5; i++) {
+            hand.hand[i] = deck.remaining_cards[i];
+            cout << hand.hand[i].cardToString() << " ";
+        }
+
+        cout << "\n";
+
+        PokerHands result = hand.evaluateHand();
+
+        cout << "Evaluated as: " << pokerHandToString(result) << "\n";
+    }
+}
+
+void simulateHands(int SIMULATIONS) {
+    array<int, 9> handCounts = {0};  // Index matches PokerHands enum
+
+    Deck deck;
+    Hand hand;
+
+    random_device rd;
+    mt19937 g(rd());
+
+    for (int i = 0; i < SIMULATIONS; ++i) {
+        // Shuffle the shared deck
+        shuffle(deck.remaining_cards.begin(), deck.remaining_cards.end(), g);
+
+        // Take the first 5 cards into the hand
+        for (int j = 0; j < 5; j++) {
+            hand.hand[j] = deck.remaining_cards[j];
+        }
+
+        // Evaluate the hand and count it
+        PokerHands result = hand.evaluateHand();
+        handCounts[result]++;
+    }
+
+    // Display results
+    cout << "After " << SIMULATIONS << " simulated hands:\n";
+    for (int i = 0; i < handCounts.size(); ++i) {
+        cout << pokerHandToString(static_cast<PokerHands>(i)) << ": " << handCounts[i] << "\n";
+    }
+}
+
+int main() {
+    auto start = high_resolution_clock::now();
+
+    simulateHands(100000000);
+
+    auto end = high_resolution_clock::now();
+    auto duration = duration_cast<minutes>(end - start);
+    cout << "Simulation completed in " << duration.count() << " minutes\n";
+
+    return 0;
+}
+
